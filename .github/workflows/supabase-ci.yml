@@ -1,0 +1,28 @@
+name: Supabase CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/**'
+      - '.github/workflows/supabase-ci.yml'
+      - '.github/workflows/supabase-deploy.yml'
+
+jobs:
+  validate-migrations:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase
+        run: supabase db start
+
+      - name: List migrations
+        run: supabase migration list --local

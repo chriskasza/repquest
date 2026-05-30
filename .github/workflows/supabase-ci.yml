@@ -25,4 +25,4 @@ jobs:
         run: supabase db start
 
       - name: List migrations
-        run: supabase migration list
+        run: supabase migration list --local

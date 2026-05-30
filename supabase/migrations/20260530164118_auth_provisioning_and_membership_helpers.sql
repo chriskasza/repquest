@@ -100,6 +100,7 @@ begin
 end;
 $$;
 
+drop trigger if exists on_workspace_created on public.workspaces;
 create trigger on_workspace_created
   after insert on public.workspaces
   for each row
@@ -136,6 +137,7 @@ begin
 end;
 $$;
 
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row

@@ -55,6 +55,7 @@ A `profiles` table will extend the auth user record with app-specific fields suc
 - `id`
 - `display_name`
 - `created_at`
+- `updated_at`
 
 The profile primary key should match the authenticated Supabase user ID so that the application has a stable user identity across all domain tables.
 
@@ -74,12 +75,14 @@ Each workspace should include:
 - `owner_user_id`
 - `kind` (`personal` or `shared`)
 - `created_at`
+- `updated_at`
 
 Membership rows should include:
 - `workspace_id`
 - `user_id`
 - `role`
 - `created_at`
+- `updated_at`
 
 The initial role model can remain simple:
 - `owner`
@@ -114,6 +117,7 @@ Recommended fields:
 - `instructions_json`
 - `is_active`
 - `created_at`
+- `updated_at`
 
 ### Exercise modeling notes
 - `slug` should be unique and stable for routing and lookups.
@@ -165,6 +169,7 @@ Recommended fields:
 - `is_archived`
 - `created_by`
 - `created_at`
+- `updated_at`
 
 ### Routine template exercises
 Each routine template should contain an ordered list of exercises.
@@ -184,10 +189,12 @@ Recommended fields:
 - `planned_weight_kg`
 - `notes`
 - `created_at`
+- `updated_at`
 
 ### Planning model notes
-- `position` should be unique within each routine template.
+- `position` must be unique within each routine template: `UNIQUE (routine_template_id, position)`.
 - `planned_metric_type` may mirror the exercise default, but should be stored explicitly on the routine line item.
+- Divergence from `exercises.metric_type` is intentional (e.g. bodyweight vs. weighted variant of the same exercise). The DB only enforces that values are valid enum members; the app layer is responsible for pre-populating `planned_metric_type` from the exercise default and warning — but not blocking — when a routine line overrides it.
 - The planning model should allow users to create simple routines without requiring advanced programming constructs.
 - The first version should favor clarity over overly flexible programming abstractions.
 
@@ -207,6 +214,7 @@ Recommended fields:
 - `status`
 - `created_by`
 - `created_at`
+- `updated_at`
 
 ### Scheduling model notes
 The first version should treat scheduling as planning rather than calendar-grade event management.
@@ -224,6 +232,39 @@ Recommended status values:
 - `skipped`
 - `canceled`
 
+### Schedule status ownership
+
+`completed` is set automatically by a DB trigger (`sync_scheduled_workout_completion`) that fires
+on INSERT or UPDATE OF `completed_at` on `workout_sessions`. When `completed_at` is non-null and
+`scheduled_workout_id` is non-null, the trigger updates the linked `scheduled_workouts` row to
+`status = 'completed'` — but only if the current status is `planned`, so a manually set
+`skipped` or `canceled` is never overwritten.
+
+`skipped` and `canceled` have no session counterpart (they represent workouts that did not happen),
+so those transitions are the client's responsibility via direct UPDATE on `scheduled_workouts`.
+
+The trigger must be created in the same migration that creates `workout_sessions` (Phase 4):
+
+```sql
+create or replace function public.sync_scheduled_workout_completion()
+returns trigger language plpgsql security definer set search_path = ''
+as $$
+begin
+  if NEW.completed_at is not null and NEW.scheduled_workout_id is not null then
+    update public.scheduled_workouts
+    set status = 'completed'
+    where id = NEW.scheduled_workout_id
+      and status = 'planned';
+  end if;
+  return NEW;
+end;
+$$;
+
+create trigger on_session_completed
+  after insert or update of completed_at on public.workout_sessions
+  for each row execute procedure public.sync_scheduled_workout_completion();
+```
+
 ## Workout sessions
 Workout sessions represent actual workout execution.
 
@@ -238,6 +279,7 @@ Recommended fields:
 - `session_notes`
 - `created_by`
 - `created_at`
+- `updated_at`
 
 ### Session model notes
 - A session may or may not originate from a scheduled workout.
@@ -265,9 +307,10 @@ Recommended fields:
 - `planned_weight_kg`
 - `notes`
 - `created_at`
+- `updated_at`
 
 Recommended constraints:
-- `position` should be unique within each workout session
+- `position` must be unique within each workout session: `UNIQUE (workout_session_id, position)`
 - `planned_metric_type` should use the same allowed values as the exercise catalog
 
 ### Workout session sets
@@ -291,12 +334,16 @@ Recommended fields:
 - `actual_weight_kg`
 - `is_warmup`
 - `created_at`
+- `updated_at`
 
 Recommended constraints:
-- `set_number` should be unique within each session exercise
+- `set_number` must be unique within each session exercise: `UNIQUE (workout_session_exercise_id, set_number)`
 - `metric_type` should use the same allowed values as the exercise catalog
 
 ### Logging model notes
+- `workout_session_sets.metric_type` must match its parent `workout_session_exercises.planned_metric_type`. Mixing metric types across sets within one session exercise block produces uninterpretable history. This is enforced in the app layer (not a DB constraint — enforcing it in the DB would require a trigger joining to the parent row). The app must reject set inserts whose `metric_type` differs from the session exercise.
+- The DB only enforces that `metric_type` values are valid enum members; semantic coherence within a session exercise is the app's responsibility.
+
 This structure supports:
 - multiple working sets
 - warmup sets
@@ -372,11 +419,11 @@ These should be added as separate concerns later rather than overloading the MVP
 
 ### Phase 3: planning and scheduling — ⬜ not started
 1. Create routine template tables.
-2. Create scheduled workout tables.
+2. Create scheduled workout tables (including `status` enum and RLS).
 3. Implement routine ordering and schedule status flows.
 
 ### Phase 4: workout logging — ⬜ not started
-1. Create workout session tables.
+1. Create workout session tables (including `sync_scheduled_workout_completion` trigger — see schedule status ownership note above).
 2. Create session exercise and set logging tables.
 3. Implement start, progress, and complete flows.
 4. Validate reporting and history queries.

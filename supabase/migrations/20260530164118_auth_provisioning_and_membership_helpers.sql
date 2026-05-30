@@ -19,7 +19,6 @@ returns boolean
 language sql
 security definer
 set search_path = ''
-stable
 as $$
   select exists (
     select 1
@@ -34,7 +33,6 @@ returns boolean
 language sql
 security definer
 set search_path = ''
-stable
 as $$
   select exists (
     select 1

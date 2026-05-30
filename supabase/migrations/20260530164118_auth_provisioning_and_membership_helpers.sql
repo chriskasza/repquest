@@ -134,6 +134,12 @@ begin
   values (v_display_name || '''s workspace', new.id, 'personal');
 
   return new;
+exception when others then
+  -- Re-raise with user context so failures appear in Supabase logs rather than
+  -- surfacing only as a generic auth error. The transaction is still rolled back
+  -- (the user row is not committed), which is the correct behavior.
+  raise exception 'handle_new_user failed for user %: % (SQLSTATE %)',
+    new.id, sqlerrm, sqlstate;
 end;
 $$;
 

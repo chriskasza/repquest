@@ -1,0 +1,2 @@
+-- Intentionally empty for now.
+-- Add local development seed data in a later PR.

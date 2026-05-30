@@ -1,0 +1,15 @@
+{
+  "name": "repquest",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "db:start": "supabase start",
+    "db:stop": "supabase stop",
+    "db:reset": "supabase db reset",
+    "db:status": "supabase status",
+    "db:migration:list": "supabase migration list"
+  },
+  "devDependencies": {
+    "supabase": "2.102.0"
+  }
+}
